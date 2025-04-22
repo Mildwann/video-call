@@ -1,0 +1,28 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="primary">
+    <ion-title class="welcome-title">Welcome to Meeting</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="container">
+  <div class="welcome-container">
+    <div class="logo">
+      <img src="assets/zoom.png" alt="App Logo" class="app-logo">
+    </div>
+
+    <!-- Welcome Message -->
+    <div class="welcome-message">
+      <h2>Ready to connect with others?</h2>
+      <p>Join or create a room for your video call.</p>
+    </div>
+
+    <ion-button class="create-button" (click)="createRoom()">
+      Create Room
+    </ion-button>
+
+    <ion-button fill="outline" class="join-button" (click)="openJoinPopup()">
+      Join Room
+    </ion-button>
+
+  </div>
+</ion-content>

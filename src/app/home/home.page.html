@@ -1,20 +1,115 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>
-      Blank
-    </ion-title>
+<ion-header>
+  <ion-toolbar class="header-toolbar">
+    <ion-title class="meeting-title">Video Meeting</ion-title>
+    <ion-buttons slot="end">
+      <ion-button class="control-button" fill="clear" (click)="toggleParticipants()">
+        <ion-icon name="people-outline"></ion-icon>
+        <ion-badge color="danger" *ngIf="remoteStreams.length > 0">{{remoteStreams.length + 1}}</ion-badge>
+      </ion-button>
+      <ion-button class="control-button room-id-button" fill="clear" (click)="copyPeerId()">
+        <ion-icon name="copy-outline"></ion-icon>
+        <span class="button-label">Room ID</span>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
-    </ion-toolbar>
-  </ion-header>
+<ion-content class="meeting-container">
+  <!-- Video Grid -->
+  <div class="video-grid" [class.single-view]="remoteStreams.length === 0">
+    <!-- Local Video -->
+    <div class="video-item local-video">
+      <div class="video-container">
+        <ion-button fill="clear" class="control-button" (click)="enterPiP()">
+          <ion-icon name="expand"></ion-icon>
+          <ion-label>PiP</ion-label>
+        </ion-button>
+        <video #localVideo autoplay playsinline></video>
+        <div class="video-overlay">
+          <div class="user-info">
+            <span class="peer-id">You</span>
+            <!-- <div class="status-indicators">
+              <ion-icon [name]="isMicMuted ? 'mic-off' : 'mic'" [color]="isMicMuted ? 'danger' : 'success'"></ion-icon>
+              <ion-icon [name]="isVideoEnabled ? 'videocam' : 'videocam-off'" [color]="isVideoEnabled ? 'success' : 'medium'"></ion-icon>
+            </div> -->
+          </div>
+        </div>
+      </div>
+    </div>
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
+    <!-- Remote Videos -->
+    <div *ngFor="let remoteStream of remoteStreams" class="video-item">
+      <div class="video-container">
+        <video [srcObject]="remoteStream.stream" autoplay playsinline></video>
+        <div class="video-overlay">
+          <div class="user-info">
+            <span class="peer-id">{{ remoteStream.peerId }}</span>
+            <div class="status-indicators">
+              <!-- <ion-icon [name]="remoteStream.isMuted ? 'mic-off' : 'mic'" [color]="remoteStream.isMuted ? 'danger' : 'success'"></ion-icon>
+              <ion-icon [name]="remoteStream.isVideoOn ? 'videocam' : 'videocam-off'" [color]="remoteStream.isVideoOn ? 'success' : 'medium'"></ion-icon> -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+
+  <!-- Participants Panel -->
+  <div class="participants-panel" [class.visible]="showParticipants">
+    <div class="panel-header">
+      <h3>Participants ({{remoteStreams.length + 1}})</h3>
+      <ion-button fill="clear" (click)="toggleParticipants()">
+        <ion-icon name="close"></ion-icon>
+      </ion-button>
+    </div>
+    <div class="participants-list">
+      <div class="participant-item">
+        <div class="avatar">
+          <ion-icon name="person-circle"></ion-icon>
+        </div>
+        <div class="participant-details">
+          <strong>You</strong>
+          <div class="status">
+            <!-- <span class="status-text">{{isMicMuted ? 'Muted' : 'Unmuted'}}</span> -->
+            <!-- <span class="status-dot" [class.active]="!isMicMuted"></span> -->
+          </div>
+        </div>
+      </div>
+      <div *ngFor="let stream of remoteStreams" class="participant-item">
+        <div class="avatar">
+          <ion-icon name="person-circle"></ion-icon>
+        </div>
+        <div class="participant-details">
+          <strong>{{ stream.peerId }}</strong>
+          <div class="status">
+            <!-- <span class="status-text">{{stream.isMuted ? 'Muted' : 'Unmuted'}}</span>
+            <span class="status-dot" [class.active]="!stream.isMuted"></span> -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meeting Controls -->
+  <div class="meeting-controls">
+    <div class="controls-container">
+      <ion-button class="control-button" fill="clear" (click)="toggleMic()">
+        <ion-icon [name]="isMicMuted ? 'mic-off' : 'mic'"></ion-icon>
+        <span class="button-label">{{isMicMuted ? 'Unmute' : 'Mute'}}</span>
+      </ion-button>
+      <ion-button class="control-button" fill="clear" (click)="toggleVideo()">
+        <ion-icon [name]="isVideoEnabled ? 'videocam' : 'videocam-off'"></ion-icon>
+        <span class="button-label">{{isVideoEnabled ? 'Stop Video' : 'Start Video'}}</span>
+      </ion-button>
+      <ion-button class="control-button" fill="clear" (click)="shareScreen()">
+        <ion-icon [name]="isSharingScreen ? 'desktop' : 'desktop-outline'"></ion-icon>
+        <span class="button-label">{{isSharingScreen ? 'Stop Share' : 'Share Screen'}}</span>
+      </ion-button>
+      <ion-button class="control-button end-call" fill="clear" (click)="endCall()">
+        <ion-icon name="call-outline"></ion-icon>
+        <span class="button-label">Leave</span>
+      </ion-button>
+    </div>
   </div>
 </ion-content>

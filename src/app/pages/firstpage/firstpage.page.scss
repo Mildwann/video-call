@@ -1,0 +1,78 @@
+.welcome-title {
+    font-size: 26px; /* Increased font size for better visibility */
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    letter-spacing: 1px; /* Adds some space between letters */
+  }
+  
+
+  .welcome-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    padding: 20px;
+    text-align: center;
+    background-color: #1e1f1e; 
+  }
+  
+  .app-logo {
+    width: 250px;  
+    height: auto;
+    object-fit: contain;
+    margin-bottom: 20px;
+    border-radius: 8px; 
+  }
+  
+  .welcome-message h2 {
+    font-size: 24px; 
+    font-weight: bold;
+    margin-bottom: 15px;
+    color: #c5c5c5;
+  }
+  
+  .welcome-message p {
+    font-size: 18px; /* Slightly larger text for better readability */
+    color: #817f7f;
+    margin-bottom: 40px;
+  }
+  
+  /* Action buttons styling */
+  .create-button {
+    width: 350px;
+    font-size: 18px;
+    padding: 16px;
+    border-radius: 10px; /* Softer corners for a more modern look */
+    transition: background-color 0.3s, transform 0.2s; /* Add hover effect */
+  }
+  
+  .join-button {
+    color: white;
+    width: 350px;
+    margin: 10px;
+    font-size: 18px;
+    padding: 16px;
+    border-radius: 10px; /* Softer corners for a more modern look */
+    transition: background-color 0.3s, transform 0.2s; /* Add hover effect */
+  }
+  
+  
+  /* For mobile responsiveness, ensure buttons and logo scale properly */
+  @media (max-width: 600px) {
+    .app-logo {
+      width: 200px; /* Resize logo for smaller screens */
+    }
+  
+    .welcome-message h2 {
+      font-size: 20px; /* Adjust text size for smaller screens */
+    }
+  
+    .action-button {
+      font-size: 16px;
+      padding: 14px;
+    }
+  }
+  
+ 

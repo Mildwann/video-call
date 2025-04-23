@@ -1,8 +1,10 @@
 import { Component, ViewChild, ElementRef, OnInit, OnDestroy } from '@angular/core';
 import { Socket, io } from 'socket.io-client';
 import Peer from 'peerjs';
-import { ActivatedRoute, Router } from '@angular/router';
-import { AlertController } from '@ionic/angular';
+import { ActivatedRoute, NavigationExtras, Router } from '@angular/router';
+import { AlertController, Platform } from '@ionic/angular';
+import { NavigationStart } from '@angular/router';
+import { VideoCallService } from '../services/video-call.service'; // import
 
 
 
@@ -18,16 +20,18 @@ interface RemoteStream {
   selector: 'app-home',
   templateUrl: 'home.page.html',
   styleUrls: ['home.page.scss'],
-  standalone:false
+  standalone: false
 })
 export class HomePage implements OnInit, OnDestroy {
   @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
+  @ViewChild('localVideoMini', { static: false }) localVideoMini!: ElementRef<HTMLVideoElement>;
 
   private peer: Peer;
   private socket: Socket;
   private localStream: MediaStream | null = null;
   remoteStreams: RemoteStream[] = [];
   private connectedPeers: Set<string> = new Set();
+  private currentCallInfo: any = null;
 
   peerIdToCall: string = '';
   peerId: string = '';
@@ -38,22 +42,26 @@ export class HomePage implements OnInit, OnDestroy {
   isSpeakerView: boolean = false;
   showParticipants: boolean = false;
   isSharingScreen: boolean = false;
+  peerIdOfCaller:string='';
+  isMiniView = false;
 
   constructor(
     private route: ActivatedRoute,
     private alertController: AlertController,
     private router: Router,  // เพิ่ม Router
-    
+    private platform: Platform,
+    private videoCallService: VideoCallService
+
   ) {
     // Initialize Socket.io connection
-    this.socket = io('http://192.168.137.164:3000', {
+    this.socket = io('http://10.32.71.152:3000', {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     });
 
     // Initialize PeerJS
     this.peer = new Peer({
-      host: '192.168.137.164',
+      host: '10.32.71.152',
       port: 9000,
       path: '/peerjs',
       secure: false,
@@ -64,9 +72,81 @@ export class HomePage implements OnInit, OnDestroy {
     this.setupSocketEvents();
   }
 
+
+  goToHome() {
+    this.isMiniView = true;
+    let peerIdFromUrl = this.route.snapshot.paramMap.get('peerIdCall') || this.peerIdOfCaller;
+  
+    // ดึงค่า peerIdCall จาก URL (จาก paramMap หรือ snapshot)
+    if (this.peerIdOfCaller!='') {
+       peerIdFromUrl = this.peerIdOfCaller;
+    }
+  
+    const navigationExtras: NavigationExtras = {
+      state: {
+        showMiniView: true,
+        peerId: this.peerId,
+        isCallActive: this.isCallActive,
+        remoteStreamsCount: this.remoteStreams.length,
+        peerIdOfCaller: peerIdFromUrl
+      }
+    };
+  
+    console.log("peerIdOfCaller from URL or fallback:", peerIdFromUrl);
+  
+    setTimeout(() => {
+      this.router.navigate(['/firstpage'], navigationExtras);
+    }, 300);
+  }
+
+  async ngOnInit() {
+    try {
+      await this.initializeMediaStream();
+      this.updateMiniViewStream(); // เพิ่มบรรทัดนี้
+
+      this.route.paramMap.subscribe(async (params) => {
+        const peerId = params.get('peerIdCall');
+        if (peerId) {
+          this.peerIdToCall = peerId;
+          await this.callPeer(peerId);
+        }
+      });
+
+
+    } catch (error) {
+      console.error('Error initializing:', error);
+      this.showAlert('Error', 'Could not access camera and micropho');
+    }
+
+  }
+
+  ngOnDestroy() {
+    this.cleanup();
+  }
+
+  get isAndroidApp(): boolean {
+    return this.platform.is('android');
+  }
+  ngAfterViewInit() {
+    if (this.isAndroidApp) {
+      this.updateMiniViewStream();
+    }
+  }
+
+  private updateMiniViewStream() {
+    console.log('กำลังอัปเดต MiniView');
+    if (this.isAndroidApp && this.localVideoMini?.nativeElement && this.localStream) {
+      console.log('MiniView: กำลังตั้งค่า stream');
+      this.localVideoMini.nativeElement.srcObject = this.localStream;
+      
+    } else {
+      console.warn('MiniView: ไม่พบ video element หรือ stream');
+    }
+  }
+
   async enterPiP() {
     const video: HTMLVideoElement = this.localVideo?.nativeElement;
-  
+
     if (video && video.requestPictureInPicture) {
       try {
         await video.requestPictureInPicture();
@@ -77,6 +157,7 @@ export class HomePage implements OnInit, OnDestroy {
       console.warn("Picture-in-Picture is not supported.");
     }
   }
+
   async exitPiP() {
     if (document.pictureInPictureElement) {
       try {
@@ -86,31 +167,19 @@ export class HomePage implements OnInit, OnDestroy {
       }
     }
   }
-  async ngOnInit() {
-    try {
-      await this.initializeMediaStream();
-      
-      this.route.paramMap.subscribe(async (params) => {
-        const peerId = params.get('peerIdCall');
-        if (peerId) {
-          this.peerIdToCall = peerId;
-          await this.callPeer(peerId);
-        }
-      });
 
-    } catch (error) {
-      console.error('Error initializing:', error);
-      this.showAlert('Error', 'Could not access camera and micropho');
+  toggleMiniView() {
+    this.isMiniView = !this.isMiniView;
+    if (this.isMiniView) {
+      setTimeout(() => this.updateMiniViewStream(), 100); // ให้เวลาสร้าง DOM
     }
-  }
-
-  ngOnDestroy() {
-    this.cleanup();
   }
 
   toggleParticipants() {
     this.showParticipants = !this.showParticipants;
+
   }
+
   // Add this method to update participant status
   updateParticipantStatus(peerId: string, isMuted: boolean, isVideoOn: boolean) {
     const participant = this.remoteStreams.find(p => p.peerId === peerId);
@@ -118,7 +187,7 @@ export class HomePage implements OnInit, OnDestroy {
       participant.isMuted = isMuted;
       participant.isVideoOn = isVideoOn;
     }
-    
+
   }
   async shareScreen() {
     try {
@@ -127,29 +196,29 @@ export class HomePage implements OnInit, OnDestroy {
       if (videoTrack) {
         videoTrack.enabled = false;
       }
-  
+
       // รับสตรีมหน้าจอ
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true 
+        audio: true
       });
-  
+
       // สร้าง MediaStream ใหม่ที่รวมทั้งกล้องและหน้าจอ
       const newStream = new MediaStream();
-  
+
       // เพิ่ม track ของกล้องเข้าไปใน MediaStream ใหม่
       this.localStream?.getAudioTracks().forEach(track => newStream.addTrack(track)); // เพิ่มออดิโอ
       screenStream.getVideoTracks().forEach(track => newStream.addTrack(track)); // เพิ่มวิดีโอจากหน้าจอ
-  
+
       // เพิ่มวิดีโอจากกล้องถ้ามี
       if (videoTrack) {
         newStream.addTrack(videoTrack);
       }
-  
+
       // อัปเดต localStream และแสดงผล
       this.localStream = newStream;
       this.localVideo.nativeElement.srcObject = this.localStream;
-  
+
       // ส่งสตรีมใหม่ไปยัง peer ทั้งหมดที่เชื่อมต่ออยู่
       this.remoteStreams.forEach(remote => {
         if (remote.call) {
@@ -160,7 +229,7 @@ export class HomePage implements OnInit, OnDestroy {
           }
         }
       });
-  
+
       // จัดการเมื่อหยุดแชร์หน้าจอ
       screenStream.getVideoTracks()[0].onended = () => {
         // กลับไปใช้กล้องปกติ
@@ -170,10 +239,10 @@ export class HomePage implements OnInit, OnDestroy {
           videoTrack.enabled = true;
           cameraStream.addTrack(videoTrack);
         }
-  
+
         this.localStream = cameraStream;
         this.localVideo.nativeElement.srcObject = this.localStream;
-  
+
         // อัปเดต peer ทั้งหมด
         this.remoteStreams.forEach(remote => {
           if (remote.call) {
@@ -190,21 +259,18 @@ export class HomePage implements OnInit, OnDestroy {
       // หากเกิดข้อผิดพลาด ให้กลับไปใช้กล้องปกติ
     }
   }
-  
-  
+
   toggleSpeakerView() {
     this.isSpeakerView = !this.isSpeakerView;
   }
 
-  
 
-  
   private async initializeMediaStream() {
     try {
       if (this.isRunningInApp()) {
         // สำหรับแอพ
         await this.initializeWithCapacitor();
-        
+
       } else {
         await this.initializeWithWebRTC();
       }
@@ -218,7 +284,7 @@ export class HomePage implements OnInit, OnDestroy {
   private isRunningInApp(): boolean {
     return !!(window as any).Capacitor;
   }
-  
+
   private async initializeWithWebRTC() {
     this.localStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -230,10 +296,10 @@ export class HomePage implements OnInit, OnDestroy {
     });
     this.localVideo.nativeElement.srcObject = this.localStream;
   }
-  
+
   private async initializeWithCapacitor() {
     const { Camera } = await import('@capacitor/camera');
-    
+
     // ตรวจสอบ permission ก่อน
     const permissionStatus = await Camera.checkPermissions();
     if (permissionStatus.camera !== 'granted') {
@@ -242,18 +308,20 @@ export class HomePage implements OnInit, OnDestroy {
         throw new Error('Permission denied');
       }
     }
-  
+
     // เปิดกล้องแบบ native
     this.localStream = await navigator.mediaDevices.getUserMedia({
       video: true, // ใช้ค่ามาตรฐานของอุปกรณ์
       audio: true
     });
-    
+
     this.localVideo.nativeElement.srcObject = this.localStream;
   }
 
 
   private setupPeerEvents() {
+    
+    console.log("set up peer");
     this.peer.on('open', (id) => {
       this.peerId = id;
       console.log('My peer ID is: ' + id);
@@ -262,14 +330,18 @@ export class HomePage implements OnInit, OnDestroy {
 
     this.peer.on('call', (call) => {
       console.log('Incoming call from:', call.peer);
-      
+      this.peerIdOfCaller = call.peer;
+
       // Answer the call with our local stream
       call.answer(this.localStream!);
-      
+
       // Handle the remote stream
       call.on('stream', (remoteStream) => {
         this.addRemoteStream(call.peer, remoteStream, call);
         this.isCallActive = true;
+        this.videoCallService.remoteStream = remoteStream;  // เก็บไว้ใช้ภายหลัง
+        console.log("saving vdoooooooooo",remoteStream);
+
       });
 
       // Handle call ending
@@ -336,7 +408,7 @@ export class HomePage implements OnInit, OnDestroy {
     try {
       const call = this.peer.call(peerId, this.localStream!);
       this.connectedPeers.add(peerId);
-      
+
       call.on('stream', (remoteStream) => {
         this.addRemoteStream(peerId, remoteStream, call);
         this.isCallActive = true;
@@ -370,12 +442,12 @@ export class HomePage implements OnInit, OnDestroy {
     if (index !== -1) {
       // Stop all tracks in the stream
       this.remoteStreams[index].stream.getTracks().forEach(track => track.stop());
-      
+
       // Close the call if it exists
       if (this.remoteStreams[index].call) {
         this.remoteStreams[index].call.close();
       }
-      
+
       this.remoteStreams.splice(index, 1);
       this.connectedPeers.delete(peerId);
     }
@@ -391,7 +463,7 @@ export class HomePage implements OnInit, OnDestroy {
       this.localStream.getAudioTracks().forEach(track => {
         track.enabled = !this.isMicMuted;
       });
-      
+
       // Notify all connected peers about the mute status change
       this.remoteStreams.forEach(remote => {
         if (remote.call && remote.call.peerConnection) {
@@ -401,7 +473,7 @@ export class HomePage implements OnInit, OnDestroy {
             audioSender.replaceTrack(this.localStream!.getAudioTracks()[0]);
           }
         }
-        
+
       });
     }
   }
@@ -412,7 +484,7 @@ export class HomePage implements OnInit, OnDestroy {
       this.localStream.getVideoTracks().forEach(track => {
         track.enabled = this.isVideoEnabled;
       });
-      
+
       // Notify all connected peers about the video status change
       this.remoteStreams.forEach(remote => {
         if (remote.call && remote.call.peerConnection) {
@@ -423,6 +495,9 @@ export class HomePage implements OnInit, OnDestroy {
           }
         }
       });
+      if (this.isMiniView) {
+        this.updateMiniViewStream();
+      }
     }
   }
 
@@ -448,7 +523,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.router.navigate(['/firstpage']).then(() => {
       window.location.reload();
     });
-}
+  }
   async copyPeerId() {
     if (this.peerId) {
       try {
@@ -463,7 +538,7 @@ export class HomePage implements OnInit, OnDestroy {
 
   private cleanup() {
     this.endCall();
-    
+
     // Clean up local stream
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => track.stop());
@@ -472,12 +547,12 @@ export class HomePage implements OnInit, OnDestroy {
       }
       this.localStream = null;
     }
-    
+
     // Disconnect from signaling server
     if (this.socket) {
       this.socket.disconnect();
     }
-    
+
     // Destroy PeerJS connection
     if (this.peer) {
       this.peer.destroy();

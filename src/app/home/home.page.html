@@ -1,6 +1,13 @@
 <ion-header>
   <ion-toolbar class="header-toolbar">
+    <ion-buttons slot="start">
+      <ion-button fill="clear" class="back-button" (click)="goToHome()">
+        <ion-icon name="arrow-back"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+
     <ion-title class="meeting-title">Video Meeting</ion-title>
+
     <ion-buttons slot="end">
       <ion-button class="control-button" fill="clear" (click)="toggleParticipants()">
         <ion-icon name="people-outline"></ion-icon>
@@ -20,18 +27,22 @@
     <!-- Local Video -->
     <div class="video-item local-video">
       <div class="video-container">
-        <ion-button fill="clear" class="control-button" (click)="enterPiP()">
+        <ion-button fill="clear" class="control-button" (click)="enterPiP()" *ngIf="!isAndroidApp">
           <ion-icon name="expand"></ion-icon>
           <ion-label>PiP</ion-label>
         </ion-button>
+        
+        <!-- ----------------------app-------------------------------- -->
+        <ion-button fill="clear" class="control-button" (click)="toggleMiniView()" *ngIf="isAndroidApp">
+          <ion-icon name="expand"></ion-icon>
+          <ion-label>MiniView</ion-label>
+        </ion-button>
+        
         <video #localVideo autoplay playsinline></video>
         <div class="video-overlay">
           <div class="user-info">
             <span class="peer-id">You</span>
-            <!-- <div class="status-indicators">
-              <ion-icon [name]="isMicMuted ? 'mic-off' : 'mic'" [color]="isMicMuted ? 'danger' : 'success'"></ion-icon>
-              <ion-icon [name]="isVideoEnabled ? 'videocam' : 'videocam-off'" [color]="isVideoEnabled ? 'success' : 'medium'"></ion-icon>
-            </div> -->
+           
           </div>
         </div>
       </div>
@@ -52,7 +63,10 @@
         </div>
       </div>
     </div>
-    
+      <!-- MiniView Video -->
+      <div *ngIf="isAndroidApp && isMiniView" class="mini-view" (click)="toggleMiniView()">
+        <video #localVideoMini autoplay muted playsinline></video>
+      </div>
   </div>
 
   <!-- Participants Panel -->

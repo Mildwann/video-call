@@ -1,10 +1,6 @@
 import { Component, ViewChild, ElementRef, OnInit, OnDestroy } from '@angular/core';
-import { Socket, io } from 'socket.io-client';
-import Peer from 'peerjs';
 import { ActivatedRoute, NavigationExtras, Router } from '@angular/router';
 import { AlertController, Platform } from '@ionic/angular';
-import { NavigationStart } from '@angular/router';
-import { VideoCallService } from '../services/video-call.service'; // import
 import { PeerserviceService } from '../services/peerservice.service';
 
 
@@ -105,7 +101,6 @@ export class HomePage implements OnInit, OnDestroy {
 
   async ngOnInit() {
     
-
   }
 
   ngOnDestroy() {

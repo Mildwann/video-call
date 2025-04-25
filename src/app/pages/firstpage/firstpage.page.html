@@ -7,29 +7,6 @@
 <ion-content class="container">
   <!-- MiniView (shown only on Android when coming from home page) -->
   
-  <div *ngIf="showMiniView" class="mini-view-container">
-    <div class="mini-view-header">
-      <ion-icon name="call" [color]="callInfo.isCallActive ? 'success' : 'danger'"></ion-icon>
-      <span>Call in progress ({{ callInfo.remoteStreamsCount }} participants)</span>
-      <ion-button size="small" (click)="openMiniViewCall()">Return to Call</ion-button>
-    </div>
-    
-    <video
-    *ngIf="showMiniView"
-    #miniViewVideo
-    autoplay
-    playsinline
-    muted
-    (click)="openMiniViewCall()"
-    style="position: fixed; bottom: 20px; right: 20px; width: 150px; height: 100px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.3); z-index: 999;"
-  ></video>
-  
-    
-    <div class="mini-view-footer">
-      <span>Your ID: {{ callInfo.peerId }}</span>
-    </div>
-  </div>
-
   <div class="welcome-container">
     <div class="logo">
       <img src="assets/zoom.png" alt="App Logo" class="app-logo">
@@ -48,6 +25,16 @@
     <ion-button fill="outline" class="join-button" (click)="openJoinPopup()">
       Join Rooms
     </ion-button>
+    <div *ngIf="isInCall" class="mini-view-container" (click)="tooroom()">
+      <video #miniViewVideo autoplay muted playsinline></video>
+      <div class="mini-view-overlay">
+        <ion-icon name="expand" class="expand-icon"></ion-icon>
+        <div class="call-status">
+          <ion-icon name="videocam"></ion-icon>
+          <span>Live Call</span>
+        </div>
+      </div>
+    </div>
     
   </div>
 </ion-content>

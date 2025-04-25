@@ -5,7 +5,7 @@ import { ActivatedRoute, NavigationExtras, Router } from '@angular/router';
 import { AlertController, Platform } from '@ionic/angular';
 import { NavigationStart } from '@angular/router';
 import { VideoCallService } from '../services/video-call.service'; // import
-
+import { PeerserviceService } from '../services/peerservice.service';
 
 
 interface RemoteStream {
@@ -26,12 +26,10 @@ export class HomePage implements OnInit, OnDestroy {
   @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
   @ViewChild('localVideoMini', { static: false }) localVideoMini!: ElementRef<HTMLVideoElement>;
 
-  private peer: Peer;
-  private socket: Socket;
   private localStream: MediaStream | null = null;
+  private remoteStream: MediaStream | null = null;
   remoteStreams: RemoteStream[] = [];
   private connectedPeers: Set<string> = new Set();
-  private currentCallInfo: any = null;
 
   peerIdToCall: string = '';
   peerId: string = '';
@@ -48,33 +46,41 @@ export class HomePage implements OnInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private alertController: AlertController,
-    private router: Router,  // เพิ่ม Router
+    private router2: Router,  // เพิ่ม Router
     private platform: Platform,
-    private videoCallService: VideoCallService
-
+    private PeerserviceService: PeerserviceService
   ) {
-    // Initialize Socket.io connection
-    this.socket = io('http://10.32.71.152:3000', {
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+    this.route.paramMap.subscribe(params => {
+      const peerId = params.get('peerIdCall');
+      if (peerId) {
+        this.peerIdToCall = peerId;
+        this.PeerserviceService.callPeer(peerId);
+      }
     });
 
-    // Initialize PeerJS
-    this.peer = new Peer({
-      host: '10.32.71.152',
-      port: 9000,
-      path: '/peerjs',
-      secure: false,
-      debug: 3
+    this.PeerserviceService.remoteStream$.subscribe(stream => {
+      if (stream) {
+        this.remoteStreams = [{ stream, peerId: this.peerIdToCall }];
+      } else {
+        this.remoteStreams = [];
+      }
     });
-
-    this.setupPeerEvents();
-    this.setupSocketEvents();
+    this.PeerserviceService.localStream$.subscribe(stream => {
+      this.localStream = stream;
+      if (this.localVideo?.nativeElement) {
+        this.localVideo.nativeElement.srcObject = stream;
+      }
+    });
+  
+    this.PeerserviceService.remoteStream$.subscribe(streams => {
+      this.remoteStream = streams;
+    });
+  
+    this.initializeMediaStream();
   }
 
 
   goToHome() {
-    this.isMiniView = true;
     let peerIdFromUrl = this.route.snapshot.paramMap.get('peerIdCall') || this.peerIdOfCaller;
   
     // ดึงค่า peerIdCall จาก URL (จาก paramMap หรือ snapshot)
@@ -94,34 +100,15 @@ export class HomePage implements OnInit, OnDestroy {
   
     console.log("peerIdOfCaller from URL or fallback:", peerIdFromUrl);
   
-    setTimeout(() => {
-      this.router.navigate(['/firstpage'], navigationExtras);
-    }, 300);
+    this.router2.navigate(['/firstpage'], navigationExtras);
   }
 
   async ngOnInit() {
-    try {
-      await this.initializeMediaStream();
-      this.updateMiniViewStream(); // เพิ่มบรรทัดนี้
-
-      this.route.paramMap.subscribe(async (params) => {
-        const peerId = params.get('peerIdCall');
-        if (peerId) {
-          this.peerIdToCall = peerId;
-          await this.callPeer(peerId);
-        }
-      });
-
-
-    } catch (error) {
-      console.error('Error initializing:', error);
-      this.showAlert('Error', 'Could not access camera and micropho');
-    }
+    
 
   }
 
   ngOnDestroy() {
-    this.cleanup();
   }
 
   get isAndroidApp(): boolean {
@@ -265,19 +252,18 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
 
-  private async initializeMediaStream() {
+  async initializeMediaStream() {
     try {
-      if (this.isRunningInApp()) {
-        // สำหรับแอพ
-        await this.initializeWithCapacitor();
-
-      } else {
-        await this.initializeWithWebRTC();
+      this.localStream = await this.PeerserviceService.initializeLocalStream();
+      if (this.localVideo?.nativeElement) {
+        this.localVideo.nativeElement.srcObject = this.localStream;
+      }
+      if (this.localVideoMini?.nativeElement) {
+        this.localVideoMini.nativeElement.srcObject = this.localStream;
       }
     } catch (error) {
-      console.error('Error getting user media:', error);
-      this.showAlert('Error', 'Could not access', error);
-      throw error;
+      console.error('Error initializing media:', error);
+      // Handle error (show alert, etc.)
     }
   }
 
@@ -319,118 +305,8 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
 
-  private setupPeerEvents() {
-    
-    console.log("set up peer");
-    this.peer.on('open', (id) => {
-      this.peerId = id;
-      console.log('My peer ID is: ' + id);
-      this.socket.emit('register-peer', id);
-    });
 
-    this.peer.on('call', (call) => {
-      console.log('Incoming call from:', call.peer);
-      this.peerIdOfCaller = call.peer;
-
-      // Answer the call with our local stream
-      call.answer(this.localStream!);
-
-      // Handle the remote stream
-      call.on('stream', (remoteStream) => {
-        this.addRemoteStream(call.peer, remoteStream, call);
-        this.isCallActive = true;
-        this.videoCallService.remoteStream = remoteStream;  // เก็บไว้ใช้ภายหลัง
-        console.log("saving vdoooooooooo",remoteStream);
-
-      });
-
-      // Handle call ending
-      call.on('close', () => {
-        this.removeRemoteStream(call.peer);
-        this.checkCallStatus();
-      });
-
-      call.on('error', (err) => {
-        console.error('Call error:', err);
-        this.removeRemoteStream(call.peer);
-        this.checkCallStatus();
-      });
-    });
-
-    this.peer.on('error', (err) => {
-      console.error('Peer error:', err);
-      this.showAlert('Connection Errorr', err.message);
-    });
-
-    this.peer.on('disconnected', () => {
-      console.log('Peer disconnected, attempting to reconnect...');
-      this.peer.reconnect();
-    });
-  }
-
-  private setupSocketEvents() {
-    this.socket.on('connect', () => {
-      console.log('Connected to signaling server');
-      if (this.peerId) {
-        this.socket.emit('register-peer', this.peerId);
-      }
-    });
-
-    this.socket.on('peer-connected', (peerId: string) => {
-      if (peerId !== this.peerId && !this.connectedPeers.has(peerId)) {
-        console.log('New peer connected:', peerId);
-        this.connectedPeers.add(peerId);
-        this.callPeer(peerId);
-      }
-    });
-
-    this.socket.on('peer-disconnected', (peerId: string) => {
-      console.log('Peer disconnected:', peerId);
-      this.connectedPeers.delete(peerId);
-      this.removeRemoteStream(peerId);
-      this.checkCallStatus();
-    });
-
-    this.socket.on('disconnect', () => {
-      console.log('Disconnected from signaling server');
-    });
-
-    this.socket.on('error', (err: any) => {
-      console.error('Socket error:', err);
-    });
-  }
-
-  async callPeer(peerId: string) {
-    if (!peerId || peerId === this.peerId || this.remoteStreams.some(rs => rs.peerId === peerId)) {
-      return;
-    }
-
-    try {
-      const call = this.peer.call(peerId, this.localStream!);
-      this.connectedPeers.add(peerId);
-
-      call.on('stream', (remoteStream) => {
-        this.addRemoteStream(peerId, remoteStream, call);
-        this.isCallActive = true;
-      });
-
-      call.on('close', () => {
-        this.removeRemoteStream(peerId);
-        this.checkCallStatus();
-      });
-
-      call.on('error', (err) => {
-        console.error('Call error:', err);
-        this.removeRemoteStream(peerId);
-        this.checkCallStatus();
-      });
-
-    } catch (error) {
-      console.error('Error calling peer:', error);
-      this.showAlert('Call Error', 'Failed to establish connection');
-    }
-  }
-
+ 
   private addRemoteStream(peerId: string, stream: MediaStream, call?: any) {
     if (!this.remoteStreams.some(rs => rs.peerId === peerId)) {
       this.remoteStreams.push({ peerId, stream, call });
@@ -519,12 +395,19 @@ export class HomePage implements OnInit, OnDestroy {
     this.connectedPeers.clear();
     this.isCallActive = false;
 
+    const navigationExtras: NavigationExtras = {
+      state: {
+        reload: true,
+      }
+    };
     // นำทางกลับไปหน้า firstpage
-    this.router.navigate(['/firstpage']).then(() => {
-      window.location.reload();
-    });
+    this.router2.navigate(['/firstpage'], navigationExtras);
   }
+  
   async copyPeerId() {
+    this.PeerserviceService.peerId$.subscribe(value => {
+    this.peerId = value;
+    });
     if (this.peerId) {
       try {
         await navigator.clipboard.writeText(this.peerId);
@@ -536,28 +419,7 @@ export class HomePage implements OnInit, OnDestroy {
     }
   }
 
-  private cleanup() {
-    this.endCall();
-
-    // Clean up local stream
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
-      if (this.localVideo && this.localVideo.nativeElement) {
-        this.localVideo.nativeElement.srcObject = null;
-      }
-      this.localStream = null;
-    }
-
-    // Disconnect from signaling server
-    if (this.socket) {
-      this.socket.disconnect();
-    }
-
-    // Destroy PeerJS connection
-    if (this.peer) {
-      this.peer.destroy();
-    }
-  }
+ 
 
   private async showAlert(header: string, message: string, error?: unknown) {
     const alert = await this.alertController.create({

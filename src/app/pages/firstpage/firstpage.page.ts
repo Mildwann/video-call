@@ -1,11 +1,13 @@
 // FirstPage
-import { Component } from '@angular/core';
+import { Component,OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { Camera, CameraPermissionState } from '@capacitor/camera';
 import { Platform } from '@ionic/angular';
 import { AfterViewInit, ViewChild, ElementRef } from '@angular/core';
 import { VideoCallService } from '../../services/video-call.service';
+import { ViewWillEnter } from '@ionic/angular';
 
+import { PeerserviceService } from '../../services/peerservice.service';
 
 @Component({
   selector: 'app-firstpage',
@@ -13,14 +15,15 @@ import { VideoCallService } from '../../services/video-call.service';
   styleUrls: ['firstpage.page.scss'],
   standalone: false
 })
-export class FirstPage implements AfterViewInit {
+export class FirstPage implements AfterViewInit,OnInit,ViewWillEnter {
   @ViewChild('miniViewVideo', { static: false }) miniViewVideo!: ElementRef<HTMLVideoElement>;
-
+  isInCall:boolean=false;
+  peerId: string = '';
   peerIdCallInput: string = '';
   permissionStatus: CameraPermissionState | null = null;
   showMiniView: boolean = false;
   navCtrl: any;
-
+  isreload:boolean = false;
   callInfo: any = {
     peerId: '',
     isCallActive: false,
@@ -30,14 +33,35 @@ export class FirstPage implements AfterViewInit {
   openMiniViewCall() {
     this.router.navigate(['/home', { peerIdCall:this.callInfo.peerIdOfCaller }]);
   }
-  constructor(
-    private videoCallService: VideoCallService,
-    private router: Router,
-    private platform: Platform
-  ) {
 
+
+  constructor(
+    private router: Router,
+    private platform: Platform,
+    private peerService: PeerserviceService
+  ) {
+  
+  }
+  
+  ionViewWillEnter() {
+    this.isInCall = this.peerService.isInCall();
+    const navigation = this.router.getCurrentNavigation();
+    const navState = history.state;
+
+    if (navState?.reload) {
+      // Set reload to false in the history state
+      const newState = { ...navState, reload: false };
+      history.replaceState(newState, '');
+    
+      // Reload the page
+      window.location.reload();
+    }
+    if (this.isreload) {
+      
+    }
+    
     // Check if we're coming from home page with MiniView enabled  const navigation = this.router.getCurrentNavigation();
-   const navigation = this.router.getCurrentNavigation();
+   
     if (navigation?.extras?.state) {
       this.showMiniView = navigation.extras.state['showMiniView'] || false;
       this.callInfo = {
@@ -48,27 +72,59 @@ export class FirstPage implements AfterViewInit {
         remoteStreamsCount: navigation.extras.state['remoteStreamsCount'] || 0
       };
     }
+    console.log(this.callInfo);
+    this.peerService.localStream$.subscribe(stream => {
+      this.updateMiniView();
+    });
+
   }
   ngAfterViewInit() {
     if (this.showMiniView) {
       this.setupMiniView();
     }
+    
+  }
+  private updateMiniView() {
+    setTimeout(() => {
+      this.peerService.localStream$.subscribe(stream => {
+        this.miniViewVideo.nativeElement.srcObject = stream;
+      });
+    }, 1000);
+      
+  }
+  async ngOnInit() {
+    console.log('FirstPage initialized');
+    
+    // Initialize peer connection and get our peer ID
+    this.peerService.peerId$.subscribe(id => {
+      console.log('Our peer ID:', id);
+      this.peerId = id;
+    });
+
+    // Check for incoming call state from navigation
+    const navigation = this.router.getCurrentNavigation();
+    if (navigation?.extras?.state) {
+      this.showMiniView = navigation.extras.state['showMiniView'] || false;
+      this.callInfo = {
+        peerId: navigation.extras.state['peerId'] || '',
+        isCallActive: navigation.extras.state['isCallActive'] || false,
+        remoteStreamsCount: navigation.extras.state['remoteStreamsCount'] || 0
+      };
+      console.log('Received call state:', this.callInfo);
+    }
+
+    // Initialize local media stream
+    try {
+      await this.peerService.initializeLocalStream();
+      console.log('Local media stream initialized');
+    } catch (error) {
+      console.error('Error initializing media stream:', error);
+      console.log('Camera/Microphone Access Required', 
+                         'Please enable camera and microphone permissions to use this feature.');
+    }
   }
   private setupMiniView() {
-    // ตัวอย่างการแสดงข้อมูลการโทร
     console.log('Mini View Setup:', this.callInfo);
-    // const stream = this.videoCallService.remoteStream;
-    // console.log(stream);
-    
-    // if (stream && this.miniViewVideo?.nativeElement) {
-    //   const videoEl = this.miniViewVideo.nativeElement;
-    //   videoEl.srcObject = stream;
-    //   videoEl.play().catch(err => console.error('Mini video play error:', err));
-    // } else {
-    //   console.warn('No remote stream available in firstpage.');
-    // }
-    // ในกรณีจริงคุณอาจจะต้องการเชื่อมต่อกับ PeerJS อีกครั้งเพื่อรับสตรีม
-    // หรือใช้วิธีอื่นในการแสดงวิดีโอ
   }
 
   get isAndroidApp(): boolean {
@@ -77,8 +133,13 @@ export class FirstPage implements AfterViewInit {
 
   // Create a new room
   createRoom() {
-    this.router.navigate(['/home']);
-  }
+    this.router.navigate(['/home']).then(() => {
+      window.location.reload();
+    });  }
+    // Create a new room
+    tooroom() {
+      this.router.navigate(['/home']).then(() => {
+      });  }
 
   // Join the room using Peer ID
   joinRoom(peerIdCall: string) {
@@ -88,7 +149,7 @@ export class FirstPage implements AfterViewInit {
     }
     this.router.navigate(['/home', { peerIdCall }]);
   }
-
+ 
   // Open the alert for joining a room
   openJoinPopup() {
     this.router.navigate([], { skipLocationChange: true }).then(() => {

@@ -7,7 +7,7 @@
     </ion-buttons>
 
     <ion-title class="meeting-title">Video Meeting</ion-title>
-
+    
     <ion-buttons slot="end">
       <ion-button class="control-button" fill="clear" (click)="toggleParticipants()">
         <ion-icon name="people-outline"></ion-icon>
@@ -27,18 +27,7 @@
     <!-- Local Video -->
     <div class="video-item local-video">
       <div class="video-container">
-        <ion-button fill="clear" class="control-button" (click)="enterPiP()" *ngIf="!isAndroidApp">
-          <ion-icon name="expand"></ion-icon>
-          <ion-label>PiP</ion-label>
-        </ion-button>
-        
-        <!-- ----------------------app-------------------------------- -->
-        <ion-button fill="clear" class="control-button" (click)="toggleMiniView()" *ngIf="isAndroidApp">
-          <ion-icon name="expand"></ion-icon>
-          <ion-label>MiniView</ion-label>
-        </ion-button>
-        
-        <video #localVideo autoplay playsinline></video>
+        <video #localVideo autoplay playsinline muted="true"></video>
         <div class="video-overlay">
           <div class="user-info">
             <span class="peer-id">You</span>
@@ -61,10 +50,7 @@
         </div>
       </div>
     </div>
-      <!-- MiniView Video -->
-      <div *ngIf="isAndroidApp && isMiniView" class="mini-view" (click)="toggleMiniView()">
-        <video #localVideoMini autoplay muted playsinline></video>
-      </div>
+
   </div>
 
   <!-- Participants Panel -->

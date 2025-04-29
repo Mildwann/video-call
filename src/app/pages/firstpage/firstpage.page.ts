@@ -1,10 +1,9 @@
 // FirstPage
 import { Component,OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { Camera, CameraPermissionState } from '@capacitor/camera';
+import {  CameraPermissionState } from '@capacitor/camera';
 import { Platform } from '@ionic/angular';
 import { AfterViewInit, ViewChild, ElementRef } from '@angular/core';
-import { VideoCallService } from '../../services/video-call.service';
 import { ViewWillEnter } from '@ionic/angular';
 
 import { PeerserviceService } from '../../services/peerservice.service';
@@ -43,41 +42,44 @@ export class FirstPage implements AfterViewInit,OnInit,ViewWillEnter {
   
   }
   
-  ionViewWillEnter() {
-    this.isInCall = this.peerService.isInCall();
-    const navigation = this.router.getCurrentNavigation();
-    const navState = history.state;
+  // Update the ionViewWillEnter method:
 
-    if (navState?.reload) {
-      // Set reload to false in the history state
-      const newState = { ...navState, reload: false };
-      history.replaceState(newState, '');
-    
-      // Reload the page
-      window.location.reload();
-    }
-    if (this.isreload) {
-      
-    }
-    
-    // Check if we're coming from home page with MiniView enabled  const navigation = this.router.getCurrentNavigation();
-   
-    if (navigation?.extras?.state) {
-      this.showMiniView = navigation.extras.state['showMiniView'] || false;
-      this.callInfo = {
-        peerId: navigation.extras.state['peerId'] || '',
-        peerIdOfCaller: navigation.extras.state['peerIdOfCaller'] || '',
-        remotepeer: navigation.extras.state['remotepeer'] || '',
-        isCallActive: navigation.extras.state['isCallActive'] || false,
-        remoteStreamsCount: navigation.extras.state['remoteStreamsCount'] || 0
-      };
-    }
-    console.log(this.callInfo);
-    this.peerService.localStream$.subscribe(stream => {
-      this.updateMiniView();
-    });
+async ionViewWillEnter() {
+  this.isInCall = this.peerService.isInCall();
+  const navigation = this.router.getCurrentNavigation();
+  const navState = history.state;
 
+  if (navState?.reload) {
+    const newState = { ...navState, reload: false };
+    history.replaceState(newState, '');
+    window.location.reload();
   }
+
+  if (navigation?.extras?.state) {
+    this.showMiniView = navigation.extras.state['showMiniView'] || false;
+    this.callInfo = {
+      peerId: navigation.extras.state['peerId'] || '',
+      peerIdOfCaller: navigation.extras.state['peerIdOfCaller'] || '',
+      remotepeer: navigation.extras.state['remotepeer'] || '',
+      isCallActive: navigation.extras.state['isCallActive'] || false,
+      remoteStreamsCount: navigation.extras.state['remoteStreamsCount'] || 0
+    };
+  }
+
+  // Initialize camera only if in call
+  if (this.isInCall) {
+    try {
+      await this.peerService.initializeLocalStream();
+      console.log('Local media stream initialized for active call');
+    } catch (error) {
+      console.error('Error initializing media stream:', error);
+    }
+  }
+
+  this.peerService.localStream$.subscribe(stream => {
+    this.updateMiniView();
+  });
+}
   ngAfterViewInit() {
     if (this.showMiniView) {
       this.setupMiniView();
@@ -85,11 +87,14 @@ export class FirstPage implements AfterViewInit,OnInit,ViewWillEnter {
     
   }
   private updateMiniView() {
-    setTimeout(() => {
+    if (this.isInCall==true) {
+       setTimeout(() => {
       this.peerService.localStream$.subscribe(stream => {
         this.miniViewVideo.nativeElement.srcObject = stream;
       });
     }, 1000);
+    }
+   
       
   }
   async ngOnInit() {
@@ -112,7 +117,6 @@ export class FirstPage implements AfterViewInit,OnInit,ViewWillEnter {
       };
       console.log('Received call state:', this.callInfo);
     }
-
     // Initialize local media stream
     try {
       await this.peerService.initializeLocalStream();

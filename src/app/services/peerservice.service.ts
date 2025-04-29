@@ -22,17 +22,17 @@ export class PeerserviceService {
 
   constructor() {
     // Initialize Socket.io connection
-    this.socket = io('http://192.168.137.16:3000', {
+    this.socket = io('http://192.168.137.9:3000', {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     });
 
     // Initialize PeerJS
     this.peer = new Peer({
-      host: '192.168.137.16',
-      port: 9000,
+      host: 'serverpeer-odsl.onrender.com',
+      port: 443,
       path: '/peerjs',
-      secure: false,
+      secure: true,
       debug: 3
     });
 

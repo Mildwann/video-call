@@ -16,6 +16,7 @@ import { PeerserviceService } from '../../services/peerservice.service';
 })
 export class FirstPage implements AfterViewInit,OnInit,ViewWillEnter {
   @ViewChild('miniViewVideo', { static: false }) miniViewVideo!: ElementRef<HTMLVideoElement>;
+
   isInCall:boolean=false;
   peerId: string = '';
   peerIdCallInput: string = '';
@@ -28,6 +29,8 @@ export class FirstPage implements AfterViewInit,OnInit,ViewWillEnter {
     isCallActive: false,
     remoteStreamsCount: 0
   };
+  
+
 
   openMiniViewCall() {
     this.router.navigate(['/home', { peerIdCall:this.callInfo.peerIdOfCaller }]);

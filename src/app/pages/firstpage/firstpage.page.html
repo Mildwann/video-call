@@ -25,7 +25,10 @@
     <ion-button fill="outline" class="join-button" (click)="openJoinPopup()">
       Join Rooms
     </ion-button>
-    <div *ngIf="isInCall" class="mini-view-container" (click)="tooroom()">
+    <div *ngIf="isInCall" 
+    class="mini-view-container" 
+    
+    (click)="tooroom()">
       <video #miniViewVideo autoplay muted playsinline></video>
       <div class="mini-view-overlay">
         <ion-icon name="expand" class="expand-icon"></ion-icon>

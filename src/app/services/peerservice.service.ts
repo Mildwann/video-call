@@ -1,8 +1,6 @@
-// video-call.service.ts
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import Peer, { DataConnection } from 'peerjs';
-import { io, Socket } from 'socket.io-client';
 
 @Injectable({
   providedIn: 'root'
@@ -10,7 +8,6 @@ import { io, Socket } from 'socket.io-client';
 export class PeerserviceService {
 
   private peer: Peer;
-  private socket: Socket;
   private _peerId = new BehaviorSubject<string>('');
   private _localStream = new BehaviorSubject<MediaStream | null>(null);
   private _remoteStream = new BehaviorSubject<MediaStream | null>(null);
@@ -21,12 +18,6 @@ export class PeerserviceService {
   remoteStream$ = this._remoteStream.asObservable();
 
   constructor() {
-    // Initialize Socket.io connection
-    this.socket = io('http://192.168.137.9:3000', {
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
-
     // Initialize PeerJS
     this.peer = new Peer({
       host: 'serverpeer-odsl.onrender.com',
@@ -37,32 +28,43 @@ export class PeerserviceService {
     });
 
     this.setupPeerEvents();
-    this.setupSocketEvents();
   }
-
+  init(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this.peer?.open) {
+        resolve();
+      } else {
+        this.peer.on('open', (id) => {
+          console.log('Peer ready (from init):', id);
+          this._peerId.next(id);
+          resolve();
+        });
+  
+        this.peer.on('error', (err) => {
+          console.error('Peer init error:', err);
+          reject(err);
+        });
+      }
+    });
+  }
+  
   private setupPeerEvents() {
     this.peer.on('open', (id) => {
       console.log('PeerJS connection opened with ID:', id);
       this._peerId.next(id);
-      this.socket.emit('register-peer', id);
     });
 
     this.peer.on('call', (call) => {
       console.log('Incoming call from:', call.peer);
       const currentStream = this._localStream.getValue();
       if (currentStream) {
-        console.log('Answering call with local stream');
         call.answer(currentStream);
-
         call.on('stream', (remoteStream) => {
-          console.log('Received remote stream from:', call.peer);
           this._remoteStream.next(remoteStream);
           remoteStream.getVideoTracks().forEach(track => {
-            const isVideoEnabled = track.enabled;  // ตรวจสอบว่า video เปิดอยู่หรือไม่
-            // ส่งข้อมูลไปยัง local ว่ากล้องของ remote ถูกเปิด/ปิด
             this.dataConnection?.send({
               type: 'video-toggled',
-              disabled: !isVideoEnabled
+              disabled: !track.enabled
             });
           });
         });
@@ -71,55 +73,16 @@ export class PeerserviceService {
       }
     });
 
-    // 📦 รับ DataConnection ที่ incoming เข้ามา
     this.peer.on('connection', (conn: DataConnection) => {
-      console.log('Received data connection from', conn.peer);
       this.dataConnection = conn;
       this.dataConnection.on('data', (data) => {
         this.handleIncomingData(data);
       });
     });
 
-    this.peer.on('error', (err) => {
-      console.error('PeerJS error:', err);
-    });
-
-    this.peer.on('disconnected', () => {
-      console.log('PeerJS connection disconnected');
-    });
-
-    this.peer.on('close', () => {
-      console.log('PeerJS connection closed');
-    });
-  }
-
-  private setupSocketEvents() {
-    console.log('Setting up Socket.io events...');
-    
-    this.socket.on('connect', () => {
-      console.log('Connected to signaling server');
-      const currentId = this._peerId.getValue();
-      if (currentId) {
-        console.log('Registering peer with signaling server:', currentId);
-        this.socket.emit('register-peer', currentId);
-      }
-    });
-
-    this.socket.on('disconnect', () => {
-      console.log('Disconnected from signaling server');
-    });
-
-    this.socket.on('peer-connected', (peerId: string) => {
-      console.log('New peer connected via signaling:', peerId);
-    });
-
-    this.socket.on('peer-disconnected', (peerId: string) => {
-      console.log('Peer disconnected via signaling:', peerId);
-    });
-
-    this.socket.on('error', (err: any) => {
-      console.error('Socket.io error:', err);
-    });
+    this.peer.on('error', (err) => console.error('PeerJS error:', err));
+    this.peer.on('disconnected', () => console.log('PeerJS connection disconnected'));
+    this.peer.on('close', () => console.log('PeerJS connection closed'));
   }
 
   isInCall(): boolean {
@@ -127,13 +90,11 @@ export class PeerserviceService {
   }
 
   async initializeLocalStream() {
-    console.log('Initializing local media stream...');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
       });
-      console.log('Successfully obtained local media stream');
       this._localStream.next(stream);
       return stream;
     } catch (error) {
@@ -143,17 +104,13 @@ export class PeerserviceService {
   }
 
   callPeer(peerId: string) {
-    console.log('Attempting to call peer:', peerId);
     const currentStream = this._localStream.getValue();
     if (!currentStream) {
-      console.warn('Cannot call peer - no local stream available');
       return;
     }
 
-    console.log('Initiating call to peer:', peerId);
     const call = this.peer.call(peerId, currentStream);
 
-    // 📦 สร้าง DataConnection ด้วย
     this.dataConnection = this.peer.connect(peerId);
     this.dataConnection.on('open', () => {
       console.log('Data connection opened with', peerId);
@@ -163,7 +120,6 @@ export class PeerserviceService {
     });
 
     call.on('stream', (remoteStream) => {
-      console.log('Received remote stream from called peer:', peerId);
       this._remoteStream.next(remoteStream);
     });
 
@@ -179,7 +135,6 @@ export class PeerserviceService {
   }
 
   private handleIncomingData(data: any) {
-    console.log('Received data from peer:', data);
     if (data.type === 'mic-toggled') {
       const remoteStream = this._remoteStream.getValue();
       if (remoteStream) {
@@ -199,31 +154,17 @@ export class PeerserviceService {
   }
 
   getPeer() {
-    console.log('Getting PeerJS instance');
     return this.peer;
   }
 
-  getSocket() {
-    console.log('Getting Socket.io instance');
-    return this.socket;
-  }
-
   cleanup() {
-    console.log('Cleaning up resources...');
     const currentStream = this._localStream.getValue();
     if (currentStream) {
-      console.log('Stopping local media stream tracks');
       currentStream.getTracks().forEach(track => track.stop());
     }
 
     if (this.peer) {
-      console.log('Destroying PeerJS connection');
       this.peer.destroy();
-    }
-
-    if (this.socket) {
-      console.log('Disconnecting Socket.io');
-      this.socket.disconnect();
     }
   }
 
@@ -235,7 +176,6 @@ export class PeerserviceService {
         track.enabled = isCurrentlyMuted;
       });
 
-      // 📦 ส่ง mic status ไปให้เพื่อน
       if (this.dataConnection && this.dataConnection.open) {
         this.dataConnection.send({
           type: 'mic-toggled',
@@ -243,7 +183,7 @@ export class PeerserviceService {
         });
       }
 
-      return !isCurrentlyMuted; // Return new state (true if unmuted, false if muted)
+      return !isCurrentlyMuted;
     }
     return false;
   }
@@ -255,19 +195,18 @@ export class PeerserviceService {
       currentStream.getVideoTracks().forEach(track => {
         track.enabled = !isCurrentlyEnabled;
       });
-  
-      // 📦 ส่งข้อมูลสถานะของ video ไปยังเพื่อน
+
       if (this.dataConnection && this.dataConnection.open) {
         isCurrentlyEnabled = !isCurrentlyEnabled;
         this.dataConnection.send({
           type: 'video-toggled',
-          disabled: !isCurrentlyEnabled  // ส่งสถานะ video ว่าถูกปิดหรือเปิด
+          disabled: !isCurrentlyEnabled
         });
       }
-  
-      return !isCurrentlyEnabled; // Return new state (true if enabled, false if disabled)
+
+      return !isCurrentlyEnabled;
     }
     return false;
   }
-  
+
 }
